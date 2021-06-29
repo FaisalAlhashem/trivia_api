@@ -151,10 +151,10 @@ def create_app(test_config=None):
     @app.route('/quizzes', methods=['POST'])
     def take_quiz():
         try:
-            category = request.get_json().get('quiz_category', 0)['id']
+            category = request.get_json().get('quiz_category')['id']
             if int(category) > 6 or int(category) < 0:
                 abort(400)
-            previous_questions = request.get_json().get('previous_questions', [])
+            previous_questions = request.get_json().get('previous_questions')
             if category == 0:
                 questions = Question.query.order_by(Question.id).all()
             else:
