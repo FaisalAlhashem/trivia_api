@@ -25,15 +25,18 @@ def create_app(test_config=None):
 
         return response
 
-    def paginate_questions(request, questions):
+    def paginate_questions(request, questions=[]):
         page = request.args.get('page', 1, type=int)
         start = (page-1) * QUESTIONS_PER_PAGE
+        if len(questions) == 0:
+            questions = Question.query.order_by(Question.id).limit(
+                QUESTIONS_PER_PAGE).offset(start).all()
         end = start + QUESTIONS_PER_PAGE
 
         questions = [question.format() for question in questions]
-        current_questions = questions[start:end]
+        # current_questions = questions[start:end]
 
-        return current_questions
+        return questions
 
     @app.route('/categories', methods=['GET'])
     def get_categories():
@@ -50,21 +53,24 @@ def create_app(test_config=None):
 
     @app.route('/categories/<category_id>/questions', methods=['GET'])
     def filter_questions(category_id):
-        if category_id > '6' or category_id < '1':
+        CIDS = []  # array of every category ID
+        all_categories = Category.query.order_by(Category.id).all()
+        for category in all_categories:
+            CIDS.append(category.id)
+        try:
+            CIDS.index(int(category_id))
+        except ValueError as Value_error:
+            print(Value_error)
             abort(404)
-
         questions = Question.query.filter(
             Question.category == category_id).all()
         current_questions = paginate_questions(request, questions)
 
-        all_categories = Category.query.order_by(Category.id).all()
         categories = {}
         for category in all_categories:
             categories[category.id] = category.type
-        if len(current_questions) == 0:
-            abort(404)
 
-        total_questions = len(Question.query.all())
+        total_questions = len(current_questions)
         return jsonify({
             'success': True,
             'questions': current_questions,
@@ -75,8 +81,7 @@ def create_app(test_config=None):
 
     @app.route('/questions', methods=['GET'])
     def get_questions():
-        questions = Question.query.order_by(Question.id).all()
-        current_questions = paginate_questions(request, questions)
+        current_questions = paginate_questions(request)
         all_categories = Category.query.order_by(Category.id).all()
         categories = {}
         for category in all_categories:
@@ -86,7 +91,7 @@ def create_app(test_config=None):
         return jsonify({
             'success': True,
             'questions': current_questions,
-            'total_questions': len(questions),
+            'total_questions': Question.query.count(),
             'current_category': 'all',
             'categories': categories
         })
@@ -125,8 +130,10 @@ def create_app(test_config=None):
                 answer = body.get('answer', None)
                 difficulty = body.get('difficulty', None)
                 category = body.get('category', None)
-                if questionText is None or answer is None or difficulty is None or category is None:
-                    abort(422)
+                if not (questionText and answer and difficulty and category):
+                    # since None is a falsy object it will trigger
+                    raise ValueError(
+                        'Some information is missing, unable to create question')
                 question = Question(
                     question=questionText,
                     answer=answer,
@@ -136,30 +143,35 @@ def create_app(test_config=None):
 
                 question.insert()
 
-                questions = Question.query.order_by(Question.id).all()
-                current_questions = paginate_questions(request, questions)
-
                 return jsonify({
                     'success': True,
                     'created': question.id,
-                    'questions': current_questions,
-                    'total_questions': len(questions)
+                    'total_questions': Question.query.count()
                 })
-        except:
+        except ValueError as Value_error:
+            print(Value_error.with_traceback)
             abort(422)
+        except Exception as e:
+            print(e.with_traceback)
+            abort(400)
 
     @app.route('/quizzes', methods=['POST'])
     def take_quiz():
         try:
-            category = request.get_json().get('quiz_category')['id']
-            if int(category) > 6 or int(category) < 0:
-                abort(400)
+            category_id = request.get_json().get('quiz_category')['id']
+            CIDS = []  # array of every category ID
+            all_categories = Category.query.order_by(Category.id).all()
+            for category in all_categories:
+                CIDS.append(category.id)
+            CIDS.index(int(category_id))
             previous_questions = request.get_json().get('previous_questions')
-            if category == 0:
+            if category_id == 0:
                 questions = Question.query.order_by(Question.id).all()
             else:
-                questions = [question.format() for question in Question.query.filter(
-                    Question.category == category).all()]
+                unformated_questions = Question.query.filter(
+                    Question.category == category_id).all()
+                questions = [question.format()
+                             for question in unformated_questions]
             for Qid in previous_questions:
                 toBeDeleted = Question.query.filter(
                     Question.id == Qid).one_or_none()
@@ -173,7 +185,11 @@ def create_app(test_config=None):
                 'previous_questions': previous_questions,
                 'question': choice,
             })
-        except:
+        except ValueError as Value_error:
+            print(Value_error.with_traceback)
+            abort(404)
+        except Exception as e:
+            print(e.with_traceback)
             abort(400)
 
     @app.errorhandler(404)

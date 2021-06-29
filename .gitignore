@@ -13,6 +13,7 @@ ehthumbs.db
 Thumbs.db
 
 .github/**
-
+node_modules
 .prettierignore
 .idea
+.env
