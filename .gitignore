@@ -16,5 +16,3 @@ Thumbs.db
 
 .prettierignore
 .idea
-
-node_modules
